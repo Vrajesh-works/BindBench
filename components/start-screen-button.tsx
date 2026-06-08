@@ -32,6 +32,18 @@ export function StartScreenButton({
         body: JSON.stringify({ projectId, compoundIds: compounds.map((c) => c.id) }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "start failed");
+
+      const result = await res.json();
+      if (typeof pendo !== "undefined") {
+        pendo.track("screening_started", {
+          screenId: result.screenId ?? "",
+          projectId,
+          compoundCount: compounds.length,
+          predictionsStarted: result.predictionsStarted ?? compounds.length,
+          targetName: result.targetName ?? "",
+        });
+      }
+
       setMsg("Screen running. Results will populate as predictions complete.");
       router.refresh();
     } catch (e: any) {

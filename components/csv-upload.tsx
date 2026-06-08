@@ -47,6 +47,16 @@ export function CsvUpload() {
           return;
         }
         const { inserted } = await r.json();
+
+        if (typeof pendo !== "undefined") {
+          pendo.track("compounds_csv_imported", {
+            compoundsInserted: inserted,
+            totalRowsParsed: res.data.length,
+            invalidRowsSkipped: res.data.length - compounds.length,
+            fileSource: "csv",
+          });
+        }
+
         setMsg(`Added ${inserted} compounds.`);
         if (inputRef.current) inputRef.current.value = "";
         router.refresh();
