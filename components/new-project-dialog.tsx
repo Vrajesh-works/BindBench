@@ -50,6 +50,18 @@ export function NewProjectDialog() {
       setError((await res.json()).error ?? "Failed to create project");
       return;
     }
+
+    const result = await res.json();
+    if (typeof pendo !== "undefined") {
+      pendo.track("project_created", {
+        projectId: result.id ?? "",
+        projectName: String(body.name ?? ""),
+        targetName: String(body.target.name ?? ""),
+        sequenceLength: body.target.sequence.length,
+        hasDescription: Boolean(body.description),
+      });
+    }
+
     setOpen(false);
     router.refresh();
   }
