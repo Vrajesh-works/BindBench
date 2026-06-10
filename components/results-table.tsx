@@ -27,6 +27,14 @@ export type ResultRow = {
   smiles: string;
 };
 
+type ViewerState = {
+  url: string;
+  name: string;
+  affinity: number | null;
+  bindingProb: number | null;
+  confidence: number | null;
+};
+
 function statusBadge(status: ResultRow["status"]) {
   switch (status) {
     case "succeeded":
@@ -61,11 +69,23 @@ function statusBadge(status: ResultRow["status"]) {
 
 const fmt = (v: number | null, d = 3) => (v == null ? "—" : v.toFixed(d));
 
+/**
+ * Maps an affinity value to a teal tint: stronger binders (higher value)
+ * get a more saturated background. Works in both light and dark mode
+ * because the fixed teal rgba composites over either surface.
+ */
+function affinityTint(value: number | null, min: number, max: number): string | undefined {
+  if (value == null || max <= min) return undefined;
+  const t = (value - min) / (max - min);
+  const alpha = (0.06 + t * 0.42).toFixed(3);
+  return `rgba(13, 148, 136, ${alpha})`;
+}
+
 export function ResultsTable({ projectId }: { projectId: string }) {
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
+  const [viewer, setViewer] = useState<ViewerState | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -103,13 +123,14 @@ export function ResultsTable({ projectId }: { projectId: string }) {
     };
   }, [refresh]);
 
-  const { done, running, maxAffinity } = useMemo(() => {
+  const { done, running, minAffinity, maxAffinity } = useMemo(() => {
     const affinities = rows
       .map((r) => r.affinity_pred_value)
       .filter((v): v is number => v != null);
     return {
       done: rows.filter((r) => r.status === "succeeded" || r.status === "failed").length,
       running: rows.some((r) => r.status === "running" || r.status === "pending"),
+      minAffinity: affinities.length ? Math.min(...affinities) : 0,
       maxAffinity: affinities.length ? Math.max(...affinities) : 0,
     };
   }, [rows]);
@@ -185,7 +206,7 @@ export function ResultsTable({ projectId }: { projectId: string }) {
       <CardContent className="p-0">
         <div className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
               {running ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
               ) : (
@@ -193,99 +214,107 @@ export function ResultsTable({ projectId }: { projectId: string }) {
               )}
               {done}/{rows.length} complete
             </span>
-            <div className="h-1.5 w-28 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-1.5 w-32 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Screen completion"
+            >
               <div
-                className="h-full rounded-full bg-primary transition-all"
+                className="h-full rounded-full bg-primary transition-all duration-500"
                 style={{ width: `${pct}%` }}
               />
             </div>
+            <span className="text-xs tabular-nums text-muted-foreground">{pct}%</span>
           </div>
           <span className="text-xs text-muted-foreground">
             Ranked by predicted affinity (pIC50-like, higher = stronger)
           </span>
         </div>
-        <Table>
-          <TableHeader className="[&_tr]:border-b">
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-12 text-center">#</TableHead>
-              <TableHead>Compound</TableHead>
-              <TableHead className="text-right">Affinity</TableHead>
-              <TableHead className="hidden text-right sm:table-cell">Bind prob.</TableHead>
-              <TableHead className="hidden text-right sm:table-cell">Confidence</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Structure</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r, i) => {
-              const rank = i + 1;
-              const isTop = rank <= 3 && r.status === "succeeded";
-              const affBar =
-                r.affinity_pred_value != null && maxAffinity > 0
-                  ? Math.max(4, Math.round((r.affinity_pred_value / maxAffinity) * 100))
-                  : 0;
-              return (
-                <TableRow
-                  key={r.id}
-                  className={r.status === "running" ? "bg-secondary/30" : undefined}
-                >
-                  <TableCell className="text-center">
-                    <span
-                      className={
-                        isTop
-                          ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold tabular-nums text-primary"
-                          : "text-sm tabular-nums text-muted-foreground"
-                      }
-                    >
-                      {rank}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium leading-tight">{r.compound_name}</div>
-                    <div className="max-w-[32ch] truncate font-mono text-xs text-muted-foreground">
-                      {r.smiles}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="font-semibold tabular-nums">
-                        {fmt(r.affinity_pred_value)}
+        <div className="max-h-[70vh] overflow-auto">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 [&_tr]:border-b">
+              <TableRow className="bg-muted hover:bg-muted">
+                <TableHead className="w-12 text-center">#</TableHead>
+                <TableHead>Compound</TableHead>
+                <TableHead className="text-right">Affinity</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Bind prob.</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Confidence</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Structure</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r, i) => {
+                const rank = i + 1;
+                const isTop = rank <= 3 && r.status === "succeeded";
+                const tint = affinityTint(r.affinity_pred_value, minAffinity, maxAffinity);
+                return (
+                  <TableRow
+                    key={r.id}
+                    className={
+                      r.status === "running"
+                        ? "bg-secondary/40 hover:bg-secondary/50"
+                        : "even:bg-muted/30"
+                    }
+                  >
+                    <TableCell className="text-center">
+                      <span
+                        className={
+                          isTop
+                            ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold tabular-nums text-primary"
+                            : "text-sm tabular-nums text-muted-foreground"
+                        }
+                      >
+                        {rank}
                       </span>
-                      {affBar > 0 && (
-                        <span className="h-1 w-16 overflow-hidden rounded-full bg-muted">
-                          <span
-                            className="block h-full rounded-full bg-primary/70"
-                            style={{ width: `${affBar}%` }}
-                          />
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">
-                    {fmt(r.affinity_probability_binary)}
-                  </TableCell>
-                  <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">
-                    {fmt(r.confidence_score, 2)}
-                  </TableCell>
-                  <TableCell>{statusBadge(r.status)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={!r.structure_url}
-                      onClick={() =>
-                        r.structure_url &&
-                        setViewer({ url: r.structure_url, name: r.compound_name })
-                      }
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium leading-tight">{r.compound_name}</div>
+                      <div className="max-w-[32ch] truncate font-mono text-xs text-muted-foreground">
+                        {r.smiles}
+                      </div>
+                    </TableCell>
+                    <TableCell
+                      className="text-right font-semibold tabular-nums"
+                      style={tint ? { backgroundColor: tint } : undefined}
                     >
-                      <Boxes className="h-4 w-4" /> 3D
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                      {fmt(r.affinity_pred_value)}
+                    </TableCell>
+                    <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">
+                      {fmt(r.affinity_probability_binary)}
+                    </TableCell>
+                    <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">
+                      {fmt(r.confidence_score, 2)}
+                    </TableCell>
+                    <TableCell>{statusBadge(r.status)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={!r.structure_url}
+                        onClick={() =>
+                          r.structure_url &&
+                          setViewer({
+                            url: r.structure_url,
+                            name: r.compound_name,
+                            affinity: r.affinity_pred_value,
+                            bindingProb: r.affinity_probability_binary,
+                            confidence: r.confidence_score,
+                          })
+                        }
+                      >
+                        <Boxes className="h-4 w-4" /> 3D
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
 
       <StructureDrawer
@@ -293,6 +322,9 @@ export function ResultsTable({ projectId }: { projectId: string }) {
         onOpenChange={(o) => !o && setViewer(null)}
         url={viewer?.url ?? null}
         title={viewer?.name ?? ""}
+        affinity={viewer?.affinity ?? null}
+        bindingProb={viewer?.bindingProb ?? null}
+        confidence={viewer?.confidence ?? null}
       />
     </Card>
   );

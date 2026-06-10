@@ -39,6 +39,17 @@ export default async function ProjectPage({
     SELECT COUNT(*)::int AS count FROM compounds
   `) as unknown as Array<{ count: number }>;
 
+  const [progress] = (await sql`
+    SELECT COUNT(pr.id)::int AS total,
+           COUNT(pr.id) FILTER (WHERE pr.status IN ('succeeded', 'failed'))::int AS done
+    FROM screens s
+    LEFT JOIN predictions pr ON pr.screen_id = s.id
+    WHERE s.project_id = ${id}
+  `) as unknown as Array<{ total: number; done: number }>;
+  const total = progress?.total ?? 0;
+  const done = progress?.done ?? 0;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
   return (
     <main className="container py-8">
       <Link
@@ -70,6 +81,20 @@ export default async function ProjectPage({
               <FlaskConical className="h-3.5 w-3.5 text-primary" />
               {compoundCount} compounds
             </span>
+            {total > 0 && (
+              <span className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1 text-muted-foreground">
+                <span className="tabular-nums">
+                  {done}/{total} predictions
+                </span>
+                <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted-foreground/20">
+                  <span
+                    className="block h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </span>
+                <span className="tabular-nums">{pct}%</span>
+              </span>
+            )}
           </div>
           {project.description && (
             <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground text-pretty">
