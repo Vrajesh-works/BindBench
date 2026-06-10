@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,33 +21,73 @@ import {
 const CA2 =
   "MSHHWGYGKHNGPEHWHKDFPIAKGERQSPVDIDTHTAKYDPSLKPLSVSYDQATSLRILNNGHAFNVEFDDSQDKAVLKGGPLDGTYRLIQFHFHWGSLDGQGSEHTVDKKKYAAELHLVHWNTKYGDFGKAVQQPDGLAVLGIFLKVGSAKPGLQKVVDVLDSIKTKGKSADFTNFDPRGLLPESLDYWTYPGSLTTPPLLECVTWIVLKEPISVSSEQVLKFRKLNFNGEGEPEELMVDNWRPAQPLKNRQIKASFK";
 
+/** Strip FASTA header lines (starting with ">") and all whitespace. */
+function cleanSequence(raw: string): string {
+  return raw
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().startsWith(">"))
+    .join("")
+    .replace(/\s/g, "")
+    .toUpperCase();
+}
+
+const VALID_AA = /^[ACDEFGHIKLMNPQRSTVWY]+$/;
+
 export function NewProjectDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [targetName, setTargetName] = useState("Carbonic Anhydrase II");
+  const [sequence, setSequence] = useState(CA2);
+
+  const cleaned = useMemo(() => cleanSequence(sequence), [sequence]);
+  const hasInvalidChars = cleaned.length > 0 && !VALID_AA.test(cleaned);
+  const canSubmit =
+    name.trim().length > 0 &&
+    targetName.trim().length > 0 &&
+    cleaned.length > 0 &&
+    !hasInvalidChars &&
+    !saving;
+
+  function resetForm() {
+    setName("");
+    setDescription("");
+    setTargetName("Carbonic Anhydrase II");
+    setSequence(CA2);
+    setError(null);
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!canSubmit) return;
     setSaving(true);
     setError(null);
-    const form = new FormData(e.currentTarget);
     const body = {
-      name: form.get("name"),
-      description: form.get("description"),
-      target: {
-        name: form.get("targetName"),
-        sequence: String(form.get("sequence") ?? "").replace(/\s/g, ""),
-      },
+      name: name.trim(),
+      description: description.trim(),
+      target: { name: targetName.trim(), sequence: cleaned },
     };
-    const res = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+
+    let res: Response;
+    try {
+      res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      setSaving(false);
+      setError("Network error — please check your connection and try again.");
+      return;
+    }
     setSaving(false);
     if (!res.ok) {
-      setError((await res.json()).error ?? "Failed to create project");
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Failed to create project");
       return;
     }
 
@@ -55,19 +95,26 @@ export function NewProjectDialog() {
     if (typeof pendo !== "undefined") {
       pendo.track("project_created", {
         projectId: result.id ?? "",
-        projectName: String(body.name ?? ""),
-        targetName: String(body.target.name ?? ""),
+        projectName: body.name,
+        targetName: body.target.name,
         sequenceLength: body.target.sequence.length,
         hasDescription: Boolean(body.description),
       });
     }
 
     setOpen(false);
+    resetForm();
     router.refresh();
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setError(null);
+      }}
+    >
       <DialogTrigger asChild>
         <Button>
           <Plus className="h-4 w-4" /> New project
@@ -83,23 +130,74 @@ export function NewProjectDialog() {
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid gap-1.5">
             <Label htmlFor="name">Project name</Label>
-            <Input id="name" name="name" required placeholder="CA2 inhibitor screen" />
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              placeholder="CA2 inhibitor screen"
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="description">Description</Label>
-            <Textarea id="description" name="description" placeholder="Optional notes" />
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional notes"
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="targetName">Target name</Label>
-            <Input id="targetName" name="targetName" required defaultValue="Carbonic Anhydrase II" />
+            <Input
+              id="targetName"
+              value={targetName}
+              onChange={(e) => setTargetName(e.target.value)}
+              required
+            />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="sequence">Target protein sequence (FASTA, no header)</Label>
-            <Textarea id="sequence" name="sequence" required rows={4} defaultValue={CA2} className="font-mono text-xs" />
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor="sequence">Target protein sequence (FASTA)</Label>
+              <span
+                className={
+                  hasInvalidChars
+                    ? "text-xs tabular-nums text-destructive"
+                    : "text-xs tabular-nums text-muted-foreground"
+                }
+              >
+                {cleaned.length} aa
+              </span>
+            </div>
+            <Textarea
+              id="sequence"
+              value={sequence}
+              onChange={(e) => setSequence(e.target.value)}
+              required
+              rows={4}
+              className="font-mono text-xs"
+              placeholder=">sp|P00918|CAH2_HUMAN&#10;MSHHWGYGK…"
+            />
+            {hasInvalidChars ? (
+              <p className="text-xs text-destructive">
+                Sequence contains non-standard characters. Use the 20 standard amino-acid letters.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                FASTA header lines and whitespace are stripped automatically.
+              </p>
+            )}
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {error}
+            </p>
+          )}
           <DialogFooter>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={!canSubmit}>
               {saving ? "Creating…" : "Create project"}
             </Button>
           </DialogFooter>
