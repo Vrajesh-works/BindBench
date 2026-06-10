@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,7 @@ export function StructureDrawer({
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!open || !url || !mountRef.current) return;
@@ -62,7 +64,7 @@ export function StructureDrawer({
         if (cancelled || !mountRef.current) return;
         mountRef.current.innerHTML = "";
         const viewer = $3Dmol.createViewer(mountRef.current, {
-          backgroundColor: "white",
+          backgroundColor: theme === "dark" ? "#0f172a" : "white",
         });
         const format = url.endsWith(".pdb") ? "pdb" : "cif";
         viewer.addModel(cif, format);
@@ -78,16 +80,18 @@ export function StructureDrawer({
     return () => {
       cancelled = true;
     };
-  }, [open, url]);
+  }, [open, url, theme]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent side="right" className="flex flex-col gap-3">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Predicted complex structure (Boltz-2).</DialogDescription>
+          <DialogTitle className="text-balance">{title}</DialogTitle>
+          <DialogDescription>
+            Predicted complex structure (Boltz-2). Drag to rotate, scroll to zoom.
+          </DialogDescription>
         </DialogHeader>
-        <div className="relative flex-1 overflow-hidden rounded-md border bg-white">
+        <div className="relative flex-1 overflow-hidden rounded-md border bg-muted/30">
           <div ref={mountRef} className="absolute inset-0" />
           {status === "loading" && (
             <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -95,8 +99,10 @@ export function StructureDrawer({
             </div>
           )}
           {status === "error" && (
-            <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              Could not load the structure. The structure URL may be unavailable or blocked by CORS.
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Could not load the structure. The structure URL may be unavailable or blocked by
+              CORS.
             </div>
           )}
         </div>
@@ -105,9 +111,9 @@ export function StructureDrawer({
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-primary underline-offset-4 hover:underline"
+            className="inline-flex items-center gap-1.5 text-xs text-primary underline-offset-4 hover:underline"
           >
-            Open structure file
+            <ExternalLink className="h-3.5 w-3.5" /> Open structure file
           </a>
         )}
       </DialogContent>
