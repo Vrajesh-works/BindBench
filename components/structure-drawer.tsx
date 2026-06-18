@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
 import {
   Dialog,
   DialogContent,
@@ -36,19 +37,37 @@ function load3Dmol(): Promise<any> {
   });
 }
 
+const fmt = (v: number | null, d = 3) => (v == null ? "—" : v.toFixed(d));
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-1 flex-col gap-0.5 rounded-md border bg-muted/40 px-3 py-2">
+      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-base font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
 export function StructureDrawer({
   open,
   onOpenChange,
   url,
   title,
+  affinity = null,
+  bindingProb = null,
+  confidence = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   url: string | null;
   title: string;
+  affinity?: number | null;
+  bindingProb?: number | null;
+  confidence?: number | null;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!open || !url || !mountRef.current) return;
@@ -62,7 +81,7 @@ export function StructureDrawer({
         if (cancelled || !mountRef.current) return;
         mountRef.current.innerHTML = "";
         const viewer = $3Dmol.createViewer(mountRef.current, {
-          backgroundColor: "white",
+          backgroundColor: theme === "dark" ? "#0f172a" : "white",
         });
         const format = url.endsWith(".pdb") ? "pdb" : "cif";
         viewer.addModel(cif, format);
@@ -78,36 +97,50 @@ export function StructureDrawer({
     return () => {
       cancelled = true;
     };
-  }, [open, url]);
+  }, [open, url, theme]);
+
+  const fileName = url ? url.split("/").pop() || "structure" : "structure";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent side="right" className="flex flex-col gap-3">
+      <DialogContent side="right" className="flex flex-col gap-4">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Predicted complex structure (Boltz-2).</DialogDescription>
+          <DialogTitle className="text-balance">{title}</DialogTitle>
+          <DialogDescription>
+            Predicted complex structure (Boltz-2). Drag to rotate, scroll to zoom.
+          </DialogDescription>
         </DialogHeader>
-        <div className="relative flex-1 overflow-hidden rounded-md border bg-white">
+
+        <div className="flex gap-2">
+          <Stat label="Affinity" value={fmt(affinity)} />
+          <Stat label="Bind prob." value={fmt(bindingProb)} />
+          <Stat label="Confidence" value={fmt(confidence, 2)} />
+        </div>
+
+        <div className="relative min-h-[60vh] flex-1 overflow-hidden rounded-md border bg-muted/30">
           <div ref={mountRef} className="absolute inset-0" />
           {status === "loading" && (
-            <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Rendering structure…
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              Rendering structure…
             </div>
           )}
           {status === "error" && (
-            <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              Could not load the structure. The structure URL may be unavailable or blocked by CORS.
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+              <p className="font-medium text-foreground">Couldn&apos;t render structure</p>
+              <p>The structure file may be unavailable or blocked by CORS.</p>
             </div>
           )}
         </div>
+
         {url && (
           <a
             href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-primary underline-offset-4 hover:underline"
+            download={fileName}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Open structure file
+            <Download className="h-4 w-4" /> Download structure
           </a>
         )}
       </DialogContent>

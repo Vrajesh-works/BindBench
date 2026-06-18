@@ -31,18 +31,18 @@
     --card: 222.2 44% 12%;
     --card-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted-foreground: 215 20.2% 72%;
     --accent: 180 40% 18%;
     --accent-foreground: 180 70% 85%;
-    --primary: 180 65% 45%;
+    --primary: 180 70% 50%;
     --primary-foreground: 222.2 47.4% 9%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 50%;
+    --destructive: 0 72% 58%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 20%;
-    --input: 217.2 32.6% 20%;
-    --ring: 180 65% 45%;
+    --border: 217.2 32.6% 24%;
+    --input: 217.2 32.6% 24%;
+    --ring: 180 70% 50%;
   }
 }
 
@@ -53,5 +53,9 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  /* Consistent, visible keyboard focus across all interactive elements */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
