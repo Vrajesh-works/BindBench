@@ -7,11 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:server": "tsx --env-file=.env.local scripts/pglite-server.ts",
-    "db:check": "tsx --env-file=.env.local scripts/db-check.ts",
-    "db:init": "tsx --env-file=.env.local scripts/db-init.ts",
-    "db:seed": "tsx --env-file=.env.local scripts/seed.ts",
-    "boltz:check": "tsx --env-file=.env.local scripts/boltz-check.ts"
+    "db:migrate": "psql \"$DATABASE_URL\" -f drizzle/0001_init.sql"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.16",
