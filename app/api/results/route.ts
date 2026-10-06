@@ -43,7 +43,8 @@ export async function GET(req: NextRequest) {
     WHERE ${
       screenId
         ? sql`s.id = ${screenId}`
-        : sql`s.project_id = ${projectId}`
+        : // resultsQuerySchema guarantees projectId or screenId is set
+          sql`s.project_id = ${projectId!}`
     }
     ORDER BY
       pr.affinity_pred_value DESC NULLS LAST,

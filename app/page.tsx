@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   FlaskConical,
-  Github,
+  ExternalLink,
   Layers,
   Target,
   Trophy,
@@ -72,7 +72,7 @@ export default function LandingPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                <Github className="mr-2 h-4 w-4" /> View on GitHub
+                <ExternalLink className="mr-2 h-4 w-4" /> View on GitHub
               </a>
             </Button>
           </div>
