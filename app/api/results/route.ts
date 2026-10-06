@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { resultsQuerySchema, validationError } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,15 +9,17 @@ export const dynamic = "force-dynamic";
 // Returns predictions joined to compounds for a project, ranked by predicted
 // affinity (strongest first), with per-row status so the UI can show "running".
 export async function GET(req: NextRequest) {
-  const projectId = req.nextUrl.searchParams.get("projectId");
-  const screenId = req.nextUrl.searchParams.get("screenId");
-
-  if (!projectId && !screenId) {
+  const parsed = resultsQuerySchema.safeParse({
+    projectId: req.nextUrl.searchParams.get("projectId") ?? undefined,
+    screenId: req.nextUrl.searchParams.get("screenId") ?? undefined,
+  });
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "projectId or screenId is required" },
+      validationError("invalid query parameters", parsed.error.issues),
       { status: 400 },
     );
   }
+  const { projectId, screenId } = parsed.data;
 
   const rows = await sql`
     SELECT

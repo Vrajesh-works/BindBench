@@ -1,156 +1,147 @@
 import Link from "next/link";
-import { ArrowRight, FlaskConical, Layers, Target } from "lucide-react";
-import { sql } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ArrowRight,
+  FlaskConical,
+  Github,
+  Layers,
+  Target,
+  Trophy,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { NewProjectDialog } from "@/components/new-project-dialog";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
-export const dynamic = "force-dynamic";
+const features = [
+  {
+    icon: Target,
+    title: "Targets and compound libraries",
+    body: "Register protein targets with sequences and UniProt IDs. Build compound libraries by hand or bulk CSV upload, stored with vector embeddings for similarity search.",
+  },
+  {
+    icon: FlaskConical,
+    title: "Boltz-2 affinity predictions",
+    body: "Fan out one prediction job per compound against the Boltz-2 API, then poll and rank as results land. A deterministic mock mode runs the whole loop with zero API cost.",
+  },
+  {
+    icon: Layers,
+    title: "Ranked, reviewable results",
+    body: "Every screen produces a ranked table of predictions with affinity scores, confidence metrics, and per-compound status from queued to succeeded.",
+  },
+];
 
-type ProjectRow = {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  target_name: string;
-  screen_count: string;
-  prediction_count: string;
-  succeeded_count: string;
-};
+const steps = [
+  { n: "01", title: "Create a project", body: "Name the campaign and attach a protein target with its sequence." },
+  { n: "02", title: "Add compounds", body: "Upload a CSV of SMILES strings or add candidates one by one." },
+  { n: "03", title: "Run the screen", body: "Start prediction jobs for the full library in one click." },
+  { n: "04", title: "Review the ranking", body: "Compare predicted affinities side by side and export the shortlist." },
+];
 
-async function getProjects(): Promise<ProjectRow[]> {
-  return (await sql`
-    SELECT p.id, p.name, p.description, p.status,
-           t.name AS target_name,
-           COUNT(DISTINCT s.id)                                AS screen_count,
-           COUNT(pr.id)                                        AS prediction_count,
-           COUNT(pr.id) FILTER (WHERE pr.status = 'succeeded') AS succeeded_count
-    FROM projects p
-    JOIN targets t          ON t.id = p.target_id
-    LEFT JOIN screens s      ON s.project_id = p.id
-    LEFT JOIN predictions pr ON pr.screen_id = s.id
-    GROUP BY p.id, t.id
-    ORDER BY p.created_at DESC
-  `) as unknown as ProjectRow[];
-}
-
-function statusVariant(status: string): "default" | "secondary" | "muted" {
-  if (status === "running") return "secondary";
-  if (status === "completed" || status === "succeeded") return "default";
-  return "muted";
-}
-
-export default async function ProjectsPage() {
-  const projects = await getProjects();
-
+export default function LandingPage() {
   return (
-    <main className="container py-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-balance">Projects</h1>
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground text-pretty">
-            Screening campaigns pairing a protein target with a compound library. Boltz-2 ranks
-            candidates to prioritize wet-lab follow-up — it does not replace experiments.
+    <div>
+      {/* Hero */}
+      <section className="border-b">
+        <div className="container py-20 md:py-28">
+          <Badge variant="secondary" className="mb-6">
+            <Trophy className="mr-1.5 h-3.5 w-3.5" />
+            H0 Hackathon &middot; Track 2
+          </Badge>
+          <h1 className="max-w-3xl text-4xl font-bold tracking-tight md:text-6xl">
+            Rank small-molecule candidates by predicted binding affinity
+          </h1>
+          <p className="mt-6 max-w-2xl text-lg text-muted-foreground">
+            BindBench is a screening workbench for small biotech labs. Point it
+            at a protein target, feed it a compound library, and get a ranked
+            shortlist powered by the Boltz-2 model, backed by Postgres with
+            pgvector.
           </p>
-        </div>
-        <NewProjectDialog />
-      </div>
-
-      {projects.length === 0 ? (
-        <Card className="mt-10 border-dashed">
-          <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <FlaskConical className="h-6 w-6" />
-            </span>
-            <div className="space-y-1">
-              <p className="font-medium">No projects yet</p>
-              <p className="text-sm text-muted-foreground">
-                Create a project to define a target and start screening your library.
-              </p>
-            </div>
-            <NewProjectDialog />
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((p) => {
-            const total = Number(p.prediction_count);
-            const done = Number(p.succeeded_count);
-            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-            return (
-              <Link
-                key={p.id}
-                href={`/projects/${p.id}`}
-                className="group rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Card className="h-full transition-all hover:border-primary/40 hover:shadow-md">
-                  <CardHeader className="gap-2 pb-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-base leading-snug text-balance">
-                        {p.name}
-                      </CardTitle>
-                      <Badge variant={statusVariant(p.status)} className="shrink-0 capitalize">
-                        {p.status}
-                      </Badge>
-                    </div>
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Target className="h-3.5 w-3.5" />
-                      <span className="truncate">{p.target_name}</span>
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {p.description ? (
-                      <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-                        {p.description}
-                      </p>
-                    ) : (
-                      <p className="text-sm italic text-muted-foreground/70">No description</p>
-                    )}
-
-                    <div className="grid grid-cols-3 gap-2 border-t pt-4">
-                      <div>
-                        <div className="text-lg font-semibold tabular-nums">{total}</div>
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Predictions
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-lg font-semibold tabular-nums text-primary">{done}</div>
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Succeeded
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1 text-lg font-semibold tabular-nums">
-                          <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                          {p.screen_count}
-                        </div>
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Screens
-                        </div>
-                      </div>
-                    </div>
-
-                    {total > 0 && (
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-1 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                      View results
-                      <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                    </div>
-                  </CardContent>
-                </Card>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button asChild size="lg">
+              <Link href="/projects">
+                Open the app <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
-            );
-          })}
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <a
+                href="https://github.com/Vrajesh-works/BindBench"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Github className="mr-2 h-4 w-4" /> View on GitHub
+              </a>
+            </Button>
+          </div>
         </div>
-      )}
-    </main>
+      </section>
+
+      {/* Features */}
+      <section className="border-b">
+        <div className="container py-16">
+          <div className="grid gap-6 md:grid-cols-3">
+            {features.map((f) => (
+              <Card key={f.title}>
+                <CardHeader>
+                  <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <f.icon className="h-4 w-4" />
+                  </span>
+                  <CardTitle className="text-lg">{f.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground">
+                  {f.body}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="border-b">
+        <div className="container py-16">
+          <h2 className="text-2xl font-bold tracking-tight">How it works</h2>
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {steps.map((s) => (
+              <div key={s.n}>
+                <div className="text-sm font-mono text-muted-foreground">{s.n}</div>
+                <div className="mt-2 font-semibold">{s.title}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{s.body}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Stack + CTA */}
+      <section>
+        <div className="container py-16">
+          <h2 className="text-2xl font-bold tracking-tight">Built with</h2>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {["Next.js 16", "TypeScript", "Tailwind CSS", "Drizzle ORM", "PostgreSQL + pgvector", "Boltz-2 API", "Vercel Cron"].map((t) => (
+              <Badge key={t} variant="outline">{t}</Badge>
+            ))}
+          </div>
+          <Card className="mt-10">
+            <CardContent className="flex flex-col items-start gap-4 p-8 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-xl font-bold">See it in action</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  The live deployment ships with a demo project so you can explore a finished screen immediately.
+                </div>
+              </div>
+              <Button asChild size="lg">
+                <Link href="/projects">
+                  Launch the demo <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+    </div>
   );
 }

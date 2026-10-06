@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const links = [
-  { href: "/", label: "Projects" },
+  { href: "/projects", label: "Projects" },
   { href: "/compounds", label: "Compounds" },
   { href: "/usage", label: "Usage" },
 ];
@@ -16,8 +16,7 @@ export function SiteNav() {
   const pathname = usePathname();
 
   function isActive(href: string) {
-    if (href === "/") return pathname === "/" || pathname.startsWith("/projects");
-    return pathname.startsWith(href);
+    return pathname === href || pathname.startsWith(href + "/");
   }
 
   return (

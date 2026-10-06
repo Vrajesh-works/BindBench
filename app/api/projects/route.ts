@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, sql, schema } from "@/lib/db";
+import { createProjectSchema, validationError } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,23 +33,25 @@ export async function GET() {
 // Body: { name, description?, targetId? , target?: { name, uniprotId?, sequence } }
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  if (!body?.name) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
+  const parsed = createProjectSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      validationError("invalid request body", parsed.error.issues),
+      { status: 400 },
+    );
   }
+  const { name, description, target: inputTarget } = parsed.data;
 
-  let targetId: string | undefined = body.targetId;
+  let targetId: string | undefined = parsed.data.targetId;
 
   if (!targetId) {
-    const t = body.target;
-    if (!t?.name || !t?.sequence) {
-      return NextResponse.json(
-        { error: "provide targetId or target { name, sequence }" },
-        { status: 400 },
-      );
-    }
     const [inserted] = await db
       .insert(schema.targets)
-      .values({ name: t.name, uniprotId: t.uniprotId ?? null, sequence: t.sequence })
+      .values({
+        name: inputTarget!.name,
+        uniprotId: inputTarget!.uniprotId ?? null,
+        sequence: inputTarget!.sequence,
+      })
       .returning({ id: schema.targets.id });
     targetId = inserted.id;
   }
@@ -56,8 +59,8 @@ export async function POST(req: NextRequest) {
   const [project] = await db
     .insert(schema.projects)
     .values({
-      name: body.name,
-      description: body.description ?? null,
+      name,
+      description: description ?? null,
       targetId: targetId!,
     })
     .returning();

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { startPrediction } from "@/lib/boltz";
+import { startScreenSchema, validationError } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,15 +13,14 @@ export const dynamic = "force-dynamic";
 // compound, flips each row to "running", and records a usage_event per job.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  const projectId: string | undefined = body?.projectId;
-  const compoundIds: string[] = Array.isArray(body?.compoundIds) ? body.compoundIds : [];
-
-  if (!projectId || compoundIds.length === 0) {
+  const parsed = startScreenSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "projectId and compoundIds[] are required" },
+      validationError("invalid request body", parsed.error.issues),
       { status: 400 },
     );
   }
+  const { projectId, compoundIds } = parsed.data;
 
   const project = await db.query.projects.findFirst({
     where: eq(schema.projects.id, projectId),
